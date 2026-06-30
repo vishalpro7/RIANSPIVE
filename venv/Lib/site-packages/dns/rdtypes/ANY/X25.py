@@ -25,7 +25,6 @@ import dns.tokenizer
 
 @dns.immutable.immutable
 class X25(dns.rdata.Rdata):
-
     """X25 record"""
 
     # see RFC 1183
@@ -37,7 +36,7 @@ class X25(dns.rdata.Rdata):
         self.address = self._as_bytes(address, True, 255)
 
     def to_text(self, origin=None, relativize=True, **kw):
-        return '"%s"' % dns.rdata._escapify(self.address)
+        return f'"{dns.rdata._escapify(self.address)}"'
 
     @classmethod
     def from_text(

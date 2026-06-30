@@ -1,6 +1,9 @@
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Query
+from sqlalchemy import asc , desc
+
 
 from sqlalchemy.orm import Session
 
@@ -11,7 +14,7 @@ from models.product_model import Product
 from schemas.product_schema import ProductCreate
 from schemas.product_schema import ProductResponse
 
-from typing import List 
+from typing import Optional
 
 router = APIRouter(
     prefix = "/products",
@@ -49,11 +52,66 @@ def create_product(
 
     return new_product
 
-@router.get("/", response_model = List[ProductResponse])
+@router.get("/", response_model = list[ProductResponse])
 def get_products(
+    skip: int = Query(default=0, ge=0),
+
+    limit: int = Query(default=10, ge=1, le=100),
+
+    search: str | None = None,
+
+    min_price: int | None = None,
+
+    max_price: int | None = None,
+
+    sort_by: str = "id",
+
+    order: str = "asc",
+
     db: Session = Depends(get_db)
 ):
-    products = db.query(Product).all()
+    
+    query = db.query(Product)
+
+
+    if search : 
+
+        query = query.filter(
+            Product.name.ilike(f"%{search}")
+        )
+
+    
+    if min_price is not None:
+
+        query = query.filter(
+            Product.price >= min_price
+        )
+
+    
+    if max_price is not None:
+
+        query = query.filter(
+            Product.price <= max_price
+        )
+
+    sort_column = getattr(Product, sort_by , Product.id)
+
+    if order.lower() == "desc":
+
+        query = query.order_by(
+            
+            desc(sort_column)
+
+        )
+
+    else : 
+
+        query = query.order_by(
+
+            asc(sort_column)
+        )
+
+    products = query.offset(skip).limit(limit).all()
 
     return products
 

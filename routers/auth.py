@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from typing import List
 from fastapi import HTTPException
 from auth.security import hash_password
 from fastapi.security import OAuth2PasswordRequestForm
@@ -48,7 +47,7 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
 
 @router.get(
     "/users",
-    response_model=List[UserResponse]
+    response_model=list[UserResponse]
 )
 def get_users(
     db: Session = Depends(get_db)

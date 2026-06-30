@@ -18,10 +18,9 @@
 import struct
 
 import dns.edns
-import dns.immutable
 import dns.exception
+import dns.immutable
 import dns.rdata
-
 
 # We don't implement from_text, and that's ok.
 # pylint: disable=abstract-method
@@ -29,7 +28,6 @@ import dns.rdata
 
 @dns.immutable.immutable
 class OPT(dns.rdata.Rdata):
-
     """OPT record"""
 
     __slots__ = ["options"]

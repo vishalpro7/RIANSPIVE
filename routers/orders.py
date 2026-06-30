@@ -14,7 +14,6 @@ from models.product_model import Product
 from schemas.order_schema import OrderCreate
 from schemas.order_schema import OrderResponse
 from services.auth_service import get_current_user
-from typing import List
 from schemas.order_schema import OrderSummary
 from schemas.order_schema import OrderDetailResponse
 
@@ -108,7 +107,7 @@ def create_order(
 
 @router.get(
     "/my-orders",
-    response_model=List[OrderSummary]
+    response_model=list[OrderSummary]
     )
 def get_my_orders(
     current_user = Depends(get_current_user),

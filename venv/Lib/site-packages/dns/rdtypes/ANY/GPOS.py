@@ -44,7 +44,6 @@ def _validate_float_string(what):
 
 @dns.immutable.immutable
 class GPOS(dns.rdata.Rdata):
-
     """GPOS record"""
 
     # see: RFC 1712
@@ -76,8 +75,9 @@ class GPOS(dns.rdata.Rdata):
             raise dns.exception.FormError("bad longitude")
 
     def to_text(self, origin=None, relativize=True, **kw):
-        return "{} {} {}".format(
-            self.latitude.decode(), self.longitude.decode(), self.altitude.decode()
+        return (
+            f"{self.latitude.decode()} {self.longitude.decode()} "
+            f"{self.altitude.decode()}"
         )
 
     @classmethod

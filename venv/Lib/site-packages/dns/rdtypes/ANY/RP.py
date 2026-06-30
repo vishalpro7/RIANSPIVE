@@ -17,13 +17,12 @@
 
 import dns.exception
 import dns.immutable
-import dns.rdata
 import dns.name
+import dns.rdata
 
 
 @dns.immutable.immutable
 class RP(dns.rdata.Rdata):
-
     """RP record"""
 
     # see: RFC 1183
@@ -38,7 +37,7 @@ class RP(dns.rdata.Rdata):
     def to_text(self, origin=None, relativize=True, **kw):
         mbox = self.mbox.choose_relativity(origin, relativize)
         txt = self.txt.choose_relativity(origin, relativize)
-        return "{} {}".format(str(mbox), str(txt))
+        return f"{str(mbox)} {str(txt)}"
 
     @classmethod
     def from_text(

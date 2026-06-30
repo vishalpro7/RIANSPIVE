@@ -1,8 +1,12 @@
+from __future__ import annotations
+
+import collections.abc as cabc
 import os
 import re
 import sys
 import typing as t
 from functools import update_wrapper
+from gettext import gettext as _
 from types import ModuleType
 from types import TracebackType
 
@@ -30,10 +34,10 @@ def _posixify(name: str) -> str:
     return "-".join(name.split()).lower()
 
 
-def safecall(func: "t.Callable[P, R]") -> "t.Callable[P, t.Optional[R]]":
+def safecall(func: t.Callable[P, R]) -> t.Callable[P, R | None]:
     """Wraps a function so that it swallows exceptions."""
 
-    def wrapper(*args: "P.args", **kwargs: "P.kwargs") -> t.Optional[R]:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
         try:
             return func(*args, **kwargs)
         except Exception:
@@ -54,7 +58,10 @@ def make_str(value: t.Any) -> str:
 
 
 def make_default_short_help(help: str, max_length: int = 45) -> str:
-    """Returns a condensed version of help string."""
+    """Returns a condensed version of help string.
+
+    :meta private:
+    """
     # Consider only the first paragraph.
     paragraph_end = help.find("\n\n")
 
@@ -110,21 +117,27 @@ class LazyFile:
     files for writing.
     """
 
+    name: str
+    mode: str
+    encoding: str | None
+    errors: str | None
+    atomic: bool
+    _f: t.IO[t.Any] | None
+    should_close: bool
+
     def __init__(
         self,
-        filename: t.Union[str, "os.PathLike[str]"],
+        filename: str | os.PathLike[str],
         mode: str = "r",
-        encoding: t.Optional[str] = None,
-        errors: t.Optional[str] = "strict",
+        encoding: str | None = None,
+        errors: str | None = "strict",
         atomic: bool = False,
-    ):
-        self.name: str = os.fspath(filename)
+    ) -> None:
+        self.name = os.fspath(filename)
         self.mode = mode
         self.encoding = encoding
         self.errors = errors
         self.atomic = atomic
-        self._f: t.Optional[t.IO[t.Any]]
-        self.should_close: bool
 
         if self.name == "-":
             self._f, self.should_close = open_stream(filename, mode, encoding, errors)
@@ -175,53 +188,67 @@ class LazyFile:
         if self.should_close:
             self.close()
 
-    def __enter__(self) -> "LazyFile":
+    def __enter__(self) -> LazyFile:
         return self
 
     def __exit__(
         self,
-        exc_type: t.Optional[t.Type[BaseException]],
-        exc_value: t.Optional[BaseException],
-        tb: t.Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        tb: TracebackType | None,
     ) -> None:
         self.close_intelligently()
 
-    def __iter__(self) -> t.Iterator[t.AnyStr]:
+    def __iter__(self) -> cabc.Iterator[t.AnyStr]:
         self.open()
         return iter(self._f)  # type: ignore
 
 
 class KeepOpenFile:
+    """Proxy a file object but keep it open across a ``with`` block.
+
+    Wraps a borrowed file (such as ``sys.stdin`` or ``sys.stdout``) so that
+    leaving a ``with`` block does not close it, as used by :func:`open_file`
+    for the ``-`` filename. The caller stays responsible for the file: an
+    explicit :meth:`close` still passes through to the wrapped object.
+
+    Dunder methods are proxied explicitly: implicit special-method lookups
+    bypass :meth:`__getattr__`, because Python resolves them on the type rather
+    than the instance.
+    """
+
+    _file: t.IO[t.Any]
+
     def __init__(self, file: t.IO[t.Any]) -> None:
-        self._file: t.IO[t.Any] = file
+        self._file = file
 
     def __getattr__(self, name: str) -> t.Any:
         return getattr(self._file, name)
 
-    def __enter__(self) -> "KeepOpenFile":
+    def __enter__(self) -> KeepOpenFile:
         return self
 
     def __exit__(
         self,
-        exc_type: t.Optional[t.Type[BaseException]],
-        exc_value: t.Optional[BaseException],
-        tb: t.Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        tb: TracebackType | None,
     ) -> None:
         pass
 
     def __repr__(self) -> str:
         return repr(self._file)
 
-    def __iter__(self) -> t.Iterator[t.AnyStr]:
+    def __iter__(self) -> cabc.Iterator[t.AnyStr]:
         return iter(self._file)
 
 
 def echo(
-    message: t.Optional[t.Any] = None,
-    file: t.Optional[t.IO[t.Any]] = None,
+    message: object = None,
+    file: t.IO[t.Any] | None = None,
     nl: bool = True,
     err: bool = False,
-    color: t.Optional[bool] = None,
+    color: bool | None = None,
 ) -> None:
     """Print a message and newline to stdout or a file. This should be
     used instead of :func:`print` because it provides better support
@@ -272,14 +299,15 @@ def echo(
         if file is None:
             return
 
-    # Convert non bytes/text into the native string type.
-    if message is not None and not isinstance(message, (str, bytes, bytearray)):
-        out: t.Optional[t.Union[str, bytes]] = str(message)
-    else:
-        out = message
+    match message:
+        case str() | bytes() | bytearray():
+            out = message
+        case None:
+            out = ""
+        case _:
+            out = str(message)
 
     if nl:
-        out = out or ""
         if isinstance(out, str):
             out += "\n"
         else:
@@ -295,7 +323,6 @@ def echo(
     # would expect. Eg: you can write to StringIO for other cases.
     if isinstance(out, (bytes, bytearray)):
         binary_file = _find_binary_writer(file)
-
         if binary_file is not None:
             file.flush()
             binary_file.write(out)
@@ -319,7 +346,7 @@ def echo(
     file.flush()
 
 
-def get_binary_stream(name: "te.Literal['stdin', 'stdout', 'stderr']") -> t.BinaryIO:
+def get_binary_stream(name: t.Literal["stdin", "stdout", "stderr"]) -> t.BinaryIO:
     """Returns a system stream for byte processing.
 
     :param name: the name of the stream to open.  Valid names are ``'stdin'``,
@@ -327,14 +354,14 @@ def get_binary_stream(name: "te.Literal['stdin', 'stdout', 'stderr']") -> t.Bina
     """
     opener = binary_streams.get(name)
     if opener is None:
-        raise TypeError(f"Unknown standard stream '{name}'")
+        raise TypeError(_("Unknown standard stream '{name}'").format(name=name))
     return opener()
 
 
 def get_text_stream(
-    name: "te.Literal['stdin', 'stdout', 'stderr']",
-    encoding: t.Optional[str] = None,
-    errors: t.Optional[str] = "strict",
+    name: t.Literal["stdin", "stdout", "stderr"],
+    encoding: str | None = None,
+    errors: str | None = "strict",
 ) -> t.TextIO:
     """Returns a system stream for text processing.  This usually returns
     a wrapped stream around a binary stream returned from
@@ -348,15 +375,15 @@ def get_text_stream(
     """
     opener = text_streams.get(name)
     if opener is None:
-        raise TypeError(f"Unknown standard stream '{name}'")
+        raise TypeError(_("Unknown standard stream '{name}'").format(name=name))
     return opener(encoding, errors)
 
 
 def open_file(
-    filename: t.Union[str, "os.PathLike[str]"],
+    filename: str | os.PathLike[str],
     mode: str = "r",
-    encoding: t.Optional[str] = None,
-    errors: t.Optional[str] = "strict",
+    encoding: str | None = None,
+    errors: str | None = "strict",
     lazy: bool = False,
     atomic: bool = False,
 ) -> t.IO[t.Any]:
@@ -390,19 +417,19 @@ def open_file(
     """
     if lazy:
         return t.cast(
-            t.IO[t.Any], LazyFile(filename, mode, encoding, errors, atomic=atomic)
+            "t.IO[t.Any]", LazyFile(filename, mode, encoding, errors, atomic=atomic)
         )
 
     f, should_close = open_stream(filename, mode, encoding, errors, atomic=atomic)
 
     if not should_close:
-        f = t.cast(t.IO[t.Any], KeepOpenFile(f))
+        f = t.cast("t.IO[t.Any]", KeepOpenFile(f))
 
     return f
 
 
 def format_filename(
-    filename: "t.Union[str, bytes, os.PathLike[str], os.PathLike[bytes]]",
+    filename: str | bytes | os.PathLike[str] | os.PathLike[bytes],
     shorten: bool = False,
 ) -> str:
     """Format a filename as a string for display. Ensures the filename can be
@@ -501,6 +528,8 @@ class PacifyFlushWrapper:
     pipe, all calls and attributes are proxied.
     """
 
+    wrapped: t.IO[t.Any]
+
     def __init__(self, wrapped: t.IO[t.Any]) -> None:
         self.wrapped = wrapped
 
@@ -518,7 +547,7 @@ class PacifyFlushWrapper:
 
 
 def _detect_program_name(
-    path: t.Optional[str] = None, _main: t.Optional[ModuleType] = None
+    path: str | None = None, _main: ModuleType | None = None
 ) -> str:
     """Determine the command used to run the program, for use in help
     text. If a file or entry point was executed, the file name is
@@ -573,12 +602,12 @@ def _detect_program_name(
 
 
 def _expand_args(
-    args: t.Iterable[str],
+    args: cabc.Iterable[str],
     *,
     user: bool = True,
     env: bool = True,
     glob_recursive: bool = True,
-) -> t.List[str]:
+) -> list[str]:
     """Simulate Unix shell expansion with Python functions.
 
     See :func:`glob.glob`, :func:`os.path.expanduser`, and

@@ -4,29 +4,47 @@ import time of Click down, some infrequently used functionality is
 placed in this module and only imported as needed.
 """
 
+from __future__ import annotations
+
+import collections.abc as cabc
 import contextlib
+import io
 import math
 import os
+import shlex
 import sys
 import time
 import typing as t
 from gettext import gettext as _
 from io import StringIO
-from shutil import which
+from pathlib import Path
 from types import TracebackType
 
 from ._compat import _default_text_stdout
 from ._compat import CYGWIN
 from ._compat import get_best_encoding
 from ._compat import isatty
-from ._compat import open_stream
 from ._compat import strip_ansi
 from ._compat import term_len
 from ._compat import WIN
 from .exceptions import ClickException
 from .utils import echo
+from .utils import KeepOpenFile
 
 V = t.TypeVar("V")
+
+
+class _BufferedTextPagerStream(t.Protocol):
+    buffer: t.BinaryIO
+
+
+def _has_binary_buffer(
+    stream: t.BinaryIO | t.TextIO,
+) -> t.TypeGuard[_BufferedTextPagerStream]:
+    # TextIO is wider than TextIOWrapper; text-only streams such as StringIO
+    # are valid TextIO values but do not expose a binary buffer to wrap.
+    return getattr(stream, "buffer", None) is not None
+
 
 if os.name == "nt":
     BEFORE_BAR = "\r"
@@ -39,19 +57,20 @@ else:
 class ProgressBar(t.Generic[V]):
     def __init__(
         self,
-        iterable: t.Optional[t.Iterable[V]],
-        length: t.Optional[int] = None,
+        iterable: cabc.Iterable[V] | None,
+        length: int | None = None,
         fill_char: str = "#",
         empty_char: str = " ",
         bar_template: str = "%(bar)s",
         info_sep: str = "  ",
+        hidden: bool = False,
         show_eta: bool = True,
-        show_percent: t.Optional[bool] = None,
+        show_percent: bool | None = None,
         show_pos: bool = False,
-        item_show_func: t.Optional[t.Callable[[t.Optional[V]], t.Optional[str]]] = None,
-        label: t.Optional[str] = None,
-        file: t.Optional[t.TextIO] = None,
-        color: t.Optional[bool] = None,
+        item_show_func: t.Callable[[V | None], str | None] | None = None,
+        label: str | None = None,
+        file: t.TextIO | None = None,
+        color: bool | None = None,
         update_min_steps: int = 1,
         width: int = 30,
     ) -> None:
@@ -59,6 +78,7 @@ class ProgressBar(t.Generic[V]):
         self.empty_char = empty_char
         self.bar_template = bar_template
         self.info_sep = info_sep
+        self.hidden = hidden
         self.show_eta = show_eta
         self.show_percent = show_percent
         self.show_pos = show_pos
@@ -90,36 +110,36 @@ class ProgressBar(t.Generic[V]):
         if iterable is None:
             if length is None:
                 raise TypeError("iterable or length is required")
-            iterable = t.cast(t.Iterable[V], range(length))
-        self.iter: t.Iterable[V] = iter(iterable)
+            iterable = t.cast("cabc.Iterable[V]", range(length))
+        self.iter: cabc.Iterable[V] = iter(iterable)
         self.length = length
-        self.pos = 0
-        self.avg: t.List[float] = []
+        self.pos: int = 0
+        self.avg: list[float] = []
         self.last_eta: float
         self.start: float
         self.start = self.last_eta = time.time()
         self.eta_known: bool = False
         self.finished: bool = False
-        self.max_width: t.Optional[int] = None
+        self.max_width: int | None = None
         self.entered: bool = False
-        self.current_item: t.Optional[V] = None
-        self.is_hidden: bool = not isatty(self.file)
-        self._last_line: t.Optional[str] = None
+        self.current_item: V | None = None
+        self._is_atty = isatty(self.file)
+        self._last_line: str | None = None
 
-    def __enter__(self) -> "ProgressBar[V]":
+    def __enter__(self) -> ProgressBar[V]:
         self.entered = True
         self.render_progress()
         return self
 
     def __exit__(
         self,
-        exc_type: t.Optional[t.Type[BaseException]],
-        exc_value: t.Optional[BaseException],
-        tb: t.Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        tb: TracebackType | None,
     ) -> None:
         self.render_finish()
 
-    def __iter__(self) -> t.Iterator[V]:
+    def __iter__(self) -> cabc.Iterator[V]:
         if not self.entered:
             raise RuntimeError("You need to use progress bars in a with block.")
         self.render_progress()
@@ -134,7 +154,7 @@ class ProgressBar(t.Generic[V]):
         return next(iter(self))
 
     def render_finish(self) -> None:
-        if self.is_hidden:
+        if self.hidden or not self._is_atty:
             return
         self.file.write(AFTER_BAR)
         self.file.flush()
@@ -167,7 +187,13 @@ class ProgressBar(t.Generic[V]):
             hours = t % 24
             t //= 24
             if t > 0:
-                return f"{t}d {hours:02}:{minutes:02}:{seconds:02}"
+                return "{d}{day_label} {h:02}:{m:02}:{s:02}".format(
+                    d=t,
+                    day_label=_("d"),
+                    h=hours,
+                    m=minutes,
+                    s=seconds,
+                )
             else:
                 return f"{hours:02}:{minutes:02}:{seconds:02}"
         return ""
@@ -228,27 +254,28 @@ class ProgressBar(t.Generic[V]):
         ).rstrip()
 
     def render_progress(self) -> None:
-        import shutil
+        if self.hidden:
+            return
 
-        if self.is_hidden:
-            # Only output the label as it changes if the output is not a
-            # TTY. Use file=stderr if you expect to be piping stdout.
+        if not self._is_atty:
+            # Only output the label once if the output is not a TTY.
             if self._last_line != self.label:
                 self._last_line = self.label
                 echo(self.label, file=self.file, color=self.color)
-
             return
 
         buf = []
         # Update width in case the terminal has been resized
         if self.autowidth:
+            import shutil
+
             old_width = self.width
             self.width = 0
             clutter_length = term_len(self.format_progress_line())
             new_width = max(0, shutil.get_terminal_size().columns - clutter_length)
-            if new_width < old_width:
+            if new_width < old_width and self.max_width is not None:
                 buf.append(BEFORE_BAR)
-                buf.append(" " * self.max_width)  # type: ignore
+                buf.append(" " * self.max_width)
                 self.max_width = new_width
             self.width = new_width
 
@@ -294,7 +321,7 @@ class ProgressBar(t.Generic[V]):
 
         self.eta_known = self.length is not None
 
-    def update(self, n_steps: int, current_item: t.Optional[V] = None) -> None:
+    def update(self, n_steps: int, current_item: V | None = None) -> None:
         """Update the progress bar by advancing a specified number of
         steps, and optionally set the ``current_item`` for this new
         position.
@@ -325,7 +352,7 @@ class ProgressBar(t.Generic[V]):
         self.current_item = None
         self.finished = True
 
-    def generator(self) -> t.Iterator[V]:
+    def generator(self) -> cabc.Iterator[V]:
         """Return a generator which yields the items added to the bar
         during construction, and updates the progress bar *after* the
         yielded block returns.
@@ -340,7 +367,7 @@ class ProgressBar(t.Generic[V]):
         if not self.entered:
             raise RuntimeError("You need to use progress bars in a with block.")
 
-        if self.is_hidden:
+        if not self._is_atty:
             yield from self.iter
         else:
             for rv in self.iter:
@@ -359,7 +386,20 @@ class ProgressBar(t.Generic[V]):
             self.render_progress()
 
 
-def pager(generator: t.Iterable[str], color: t.Optional[bool] = None) -> None:
+class MaybeStripAnsi(io.TextIOWrapper):
+    def __init__(self, stream: t.IO[bytes], *, color: bool, **kwargs: t.Any):
+        super().__init__(stream, **kwargs)
+        self.color = color
+
+    def write(self, text: str) -> int:
+        if not self.color:
+            text = strip_ansi(text)
+        return super().write(text)
+
+
+def _pager_contextmanager(
+    color: bool | None = None,
+) -> t.ContextManager[tuple[t.BinaryIO | t.TextIO, str, bool]]:
     """Decide what method to use for paging through text."""
     stdout = _default_text_stdout()
 
@@ -369,153 +409,255 @@ def pager(generator: t.Iterable[str], color: t.Optional[bool] = None) -> None:
         stdout = StringIO()
 
     if not isatty(sys.stdin) or not isatty(stdout):
-        return _nullpager(stdout, generator, color)
-    pager_cmd = (os.environ.get("PAGER", None) or "").strip()
-    if pager_cmd:
+        return _nullpager(stdout, color)
+
+    # Split using POSIX mode (the default) so that quote characters are
+    # stripped from tokens and quoted Windows paths are preserved.
+    # Non-POSIX mode retains quotes in tokens, and wrapping tokens
+    # with shlex.quote re-introduces quoting issues on Windows.
+    pager_cmd_parts = shlex.split(os.environ.get("PAGER", ""))
+    if pager_cmd_parts:
         if WIN:
-            if _tempfilepager(generator, pager_cmd, color):
-                return
-        elif _pipepager(generator, pager_cmd, color):
-            return
+            return _tempfilepager(pager_cmd_parts, color)
+        return _pipepager(pager_cmd_parts, color)
+
     if os.environ.get("TERM") in ("dumb", "emacs"):
-        return _nullpager(stdout, generator, color)
-    if (WIN or sys.platform.startswith("os2")) and _tempfilepager(
-        generator, "more", color
-    ):
-        return
-    if _pipepager(generator, "less", color):
-        return
-
-    import tempfile
-
-    fd, filename = tempfile.mkstemp()
-    os.close(fd)
-    try:
-        if _pipepager(generator, "more", color):
-            return
-        return _nullpager(stdout, generator, color)
-    finally:
-        os.unlink(filename)
+        return _nullpager(stdout, color)
+    if WIN or sys.platform.startswith("os2"):
+        return _tempfilepager(["more"], color)
+    return _pipepager(["less"], color)
 
 
-def _pipepager(generator: t.Iterable[str], cmd: str, color: t.Optional[bool]) -> bool:
-    """Page through text by feeding it to another program.  Invoking a
-    pager through this might support colors.
+@contextlib.contextmanager
+def get_pager_file(color: bool | None = None) -> t.Generator[t.TextIO, None, None]:
+    """Context manager.
 
-    Returns True if the command was found, False otherwise and thus another
-    pager should be attempted.
+    Yields a writable file-like object which can be used as an output pager.
+
+    .. versionadded:: 8.4.0
+
+    :param color: controls if the pager supports ANSI colors or not.  The
+                  default is autodetection.
     """
-    cmd_absolute = which(cmd)
-    if cmd_absolute is None:
-        return False
+    with _pager_contextmanager(color=color) as (stream, encoding, color):
+        # Split streams by capabilities rather than the abstract TextIO /
+        # BinaryIO annotations: buffered text streams can be unwrapped to bytes,
+        # while other streams are yielded as-is.
+        wrapper: MaybeStripAnsi | None = None
+        if _has_binary_buffer(stream):
+            # Text stream backed by a binary buffer.
+            wrapper = MaybeStripAnsi(stream.buffer, color=color, encoding=encoding)
+            stream = wrapper
+        try:
+            # Narrow the BinaryIO | TextIO union that _pager_contextmanager
+            # yields; the caller writes text to the pager.
+            yield t.cast(t.TextIO, stream)
+        finally:
+            try:
+                stream.flush()
+            finally:
+                # Hand the binary buffer back to the pager that produced it
+                # rather than letting this TextIOWrapper close it on garbage
+                # collection. The pager owns the buffer's lifecycle: subprocess
+                # pipes and temp files are closed by their own helpers, while a
+                # borrowed stdout must stay open for the caller. detach() runs
+                # even if flush() raised, so the buffer is never closed here.
+                if wrapper is not None:
+                    wrapper.detach()
+
+
+@contextlib.contextmanager
+def _pipepager(
+    cmd_parts: list[str], color: bool | None = None
+) -> t.Iterator[tuple[t.BinaryIO | t.TextIO, str, bool]]:
+    """Page through text by feeding it to another program.
+
+    Invokes the pager via :class:`subprocess.Popen` with an ``argv`` list
+    produced by :func:`shlex.split`. The command is resolved to an absolute
+    path with :func:`shutil.which` as recommended by the
+    :mod:`subprocess` docs for Windows compatibility.
+
+    Invoking a pager through this might support colors: if piping to
+    ``less`` and the user hasn't decided on colors, ``LESS=-R`` is set
+    automatically.
+    """
+    # Split the command into the invoked CLI and its parameters.
+    if not cmd_parts:
+        # No usable pager: fall back to stdout through _nullpager so it gets the
+        # same borrowed-stream handling and the caller's stream is not closed.
+        stdout = _default_text_stdout() or StringIO()
+        with _nullpager(stdout, color) as rv:
+            yield rv
+        return
+
+    import shutil
+
+    cmd = cmd_parts[0]
+    cmd_params = cmd_parts[1:]
+
+    cmd_filepath = shutil.which(cmd)
+    if not cmd_filepath:
+        # No usable pager: fall back to stdout through _nullpager so it gets the
+        # same borrowed-stream handling and the caller's stream is not closed.
+        stdout = _default_text_stdout() or StringIO()
+        with _nullpager(stdout, color) as rv:
+            yield rv
+        return
+
+    # Produces a normalized absolute path string.
+    # multi-call binaries such as busybox derive their identity from the symlink
+    # less -> busybox. resolve() causes them to misbehave. (eg. less becomes busybox)
+    cmd_path = Path(cmd_filepath).absolute()
+    cmd_name = cmd_path.name
 
     import subprocess
 
+    # Make a local copy of the environment to not affect the global one.
     env = dict(os.environ)
 
-    # If we're piping to less we might support colors under the
-    # condition that
-    cmd_detail = cmd.rsplit("/", 1)[-1].split()
-    if color is None and cmd_detail[0] == "less":
-        less_flags = f"{os.environ.get('LESS', '')}{' '.join(cmd_detail[1:])}"
+    # If we're piping to less and the user hasn't decided on colors, we enable
+    # them by default we find the -R flag in the command line arguments.
+    if color is None and cmd_name == "less":
+        less_flags = f"{os.environ.get('LESS', '')}{' '.join(cmd_params)}"
         if not less_flags:
             env["LESS"] = "-R"
             color = True
         elif "r" in less_flags or "R" in less_flags:
             color = True
 
+    if color is None:
+        color = False
+
     c = subprocess.Popen(
-        [cmd_absolute],
-        shell=True,
+        [str(cmd_path)] + cmd_params,
+        shell=False,
         stdin=subprocess.PIPE,
         env=env,
         errors="replace",
         text=True,
     )
-    assert c.stdin is not None
+    stdin = t.cast(t.BinaryIO, c.stdin)
+    encoding = get_best_encoding(stdin)
     try:
-        for text in generator:
-            if not color:
-                text = strip_ansi(text)
-
-            c.stdin.write(text)
-    except (OSError, KeyboardInterrupt):
+        yield stdin, encoding, color
+    except BrokenPipeError:
+        # In case the pager exited unexpectedly, ignore the broken pipe error.
         pass
-    else:
-        c.stdin.close()
-
-    # Less doesn't respect ^C, but catches it for its own UI purposes (aborting
-    # search or other commands inside less).
-    #
-    # That means when the user hits ^C, the parent process (click) terminates,
-    # but less is still alive, paging the output and messing up the terminal.
-    #
-    # If the user wants to make the pager exit on ^C, they should set
-    # `LESS='-K'`. It's not our decision to make.
-    while True:
+    except Exception as e:
+        # In case there is an exception we want to close the pager immediately
+        # and let the caller handle it.
+        # Otherwise the pager will keep running, and the user may not notice
+        # the error message, or worse yet it may leave the terminal in a broken state.
+        c.terminate()
+        raise e
+    finally:
+        # We must close stdin and wait for the pager to exit before we continue
         try:
-            c.wait()
-        except KeyboardInterrupt:
+            stdin.close()
+        # Close implies flush, so it might throw a BrokenPipeError if the pager
+        # process exited already.
+        except BrokenPipeError:
             pass
-        else:
-            break
 
-    return True
+        # Less doesn't respect ^C, but catches it for its own UI purposes (aborting
+        # search or other commands inside less).
+        #
+        # That means when the user hits ^C, the parent process (click) terminates,
+        # but less is still alive, paging the output and messing up the terminal.
+        #
+        # If the user wants to make the pager exit on ^C, they should set
+        # `LESS='-K'`. It's not our decision to make.
+        while True:
+            try:
+                c.wait()
+            except KeyboardInterrupt:
+                pass
+            else:
+                break
 
 
+@contextlib.contextmanager
 def _tempfilepager(
-    generator: t.Iterable[str],
-    cmd: str,
-    color: t.Optional[bool],
-) -> bool:
+    cmd_parts: list[str], color: bool | None = None
+) -> t.Iterator[tuple[t.BinaryIO | t.TextIO, str, bool]]:
     """Page through text by invoking a program on a temporary file.
 
-    Returns True if the command was found, False otherwise and thus another
-    pager should be attempted.
+    Used as the primary pager strategy on Windows (where piping to
+    ``more`` adds spurious ``\\r\\n``), and as a fallback on other
+    platforms. The command is resolved to an absolute path with
+    :func:`shutil.which`.
     """
-    # Which is necessary for Windows, it is also recommended in the Popen docs.
-    cmd_absolute = which(cmd)
-    if cmd_absolute is None:
-        return False
+    # Split the command into the invoked CLI and its parameters.
+    if not cmd_parts:
+        # No usable pager: fall back to stdout through _nullpager so it gets the
+        # same borrowed-stream handling and the caller's stream is not closed.
+        stdout = _default_text_stdout() or StringIO()
+        with _nullpager(stdout, color) as rv:
+            yield rv
+        return
 
+    import shutil
     import subprocess
+
+    cmd = cmd_parts[0]
+
+    cmd_filepath = shutil.which(cmd)
+    if not cmd_filepath:
+        # No usable pager: fall back to stdout through _nullpager so it gets the
+        # same borrowed-stream handling and the caller's stream is not closed.
+        stdout = _default_text_stdout() or StringIO()
+        with _nullpager(stdout, color) as rv:
+            yield rv
+        return
+
+    # Produces a normalized absolute path string.
+    # multi-call binaries such as busybox derive their identity from the symlink
+    # less -> busybox. resolve() causes them to misbehave. (eg. less becomes busybox)
+    cmd_path = Path(cmd_filepath).absolute()
+
     import tempfile
 
-    fd, filename = tempfile.mkstemp()
-    # TODO: This never terminates if the passed generator never terminates.
-    text = "".join(generator)
-    if not color:
-        text = strip_ansi(text)
     encoding = get_best_encoding(sys.stdout)
-    with open_stream(filename, "wb")[0] as f:
-        f.write(text.encode(encoding))
+    if color is None:
+        color = False
+    # On Windows, NamedTemporaryFile cannot be opened by another process
+    # while Python still has it open, so we use delete=False and clean up manually
+    # rather than using a contextmanager here.
+    f = tempfile.NamedTemporaryFile(mode="wb", delete=False)
     try:
-        subprocess.call([cmd_absolute, filename])
-    except OSError:
-        # Command not found
-        pass
+        yield t.cast(t.BinaryIO, f), encoding, color
+        f.flush()
+        f.close()
+        subprocess.call([str(cmd_path), f.name])
     finally:
-        os.close(fd)
-        os.unlink(filename)
-
-    return True
+        os.unlink(f.name)
 
 
+@contextlib.contextmanager
 def _nullpager(
-    stream: t.TextIO, generator: t.Iterable[str], color: t.Optional[bool]
-) -> None:
-    """Simply print unformatted text.  This is the ultimate fallback."""
-    for text in generator:
-        if not color:
-            text = strip_ansi(text)
-        stream.write(text)
+    stream: t.TextIO, color: bool | None = None
+) -> t.Iterator[tuple[t.TextIO, str, bool]]:
+    """Simply print unformatted text. This is the ultimate fallback. Don't close the
+    output stream in this case, since it's coming from elsewhere rather than our
+    internal helpers.
+
+    The stream is wrapped in :class:`~click.utils.KeepOpenFile` so that, as a
+    borrowed stream, it is not closed by a ``with`` block. The wrapper that
+    :func:`get_pager_file` builds around it is detached rather than closed.
+    """
+    encoding = get_best_encoding(stream)
+
+    if color is None:
+        color = False
+
+    yield KeepOpenFile(stream), encoding, color  # type: ignore[misc]
 
 
 class Editor:
     def __init__(
         self,
-        editor: t.Optional[str] = None,
-        env: t.Optional[t.Mapping[str, str]] = None,
+        editor: str | None = None,
+        env: cabc.Mapping[str, str] | None = None,
         require_save: bool = True,
         extension: str = ".txt",
     ) -> None:
@@ -533,23 +675,34 @@ class Editor:
                 return rv
         if WIN:
             return "notepad"
+
+        from shutil import which
+
         for editor in "sensible-editor", "vim", "nano":
             if which(editor) is not None:
                 return editor
         return "vi"
 
-    def edit_file(self, filename: str) -> None:
+    def edit_files(self, filenames: cabc.Iterable[str]) -> None:
+        """Open files in the user's editor."""
+        import shlex
         import subprocess
 
         editor = self.get_editor()
-        environ: t.Optional[t.Dict[str, str]] = None
+        environ: dict[str, str] | None = None
 
         if self.env:
             environ = os.environ.copy()
             environ.update(self.env)
 
         try:
-            c = subprocess.Popen(f'{editor} "{filename}"', env=environ, shell=True)
+            # Split in POSIX mode (the default) for the same reasons as
+            # in pager(): strips quotes from tokens and preserves quoted
+            # Windows paths.
+            c = subprocess.Popen(
+                args=shlex.split(editor) + list(filenames),
+                env=environ,
+            )
             exit_code = c.wait()
             if exit_code != 0:
                 raise ClickException(
@@ -560,11 +713,19 @@ class Editor:
                 _("{editor}: Editing failed: {e}").format(editor=editor, e=e)
             ) from e
 
-    def edit(self, text: t.Optional[t.AnyStr]) -> t.Optional[t.AnyStr]:
+    @t.overload
+    def edit(self, text: bytes | bytearray) -> bytes | None: ...
+
+    # We cannot know whether or not the type expected is str or bytes when None
+    # is passed, so str is returned as that was what was done before.
+    @t.overload
+    def edit(self, text: str | None) -> str | None: ...
+
+    def edit(self, text: str | bytes | bytearray | None) -> str | bytes | None:
         import tempfile
 
-        if not text:
-            data = b""
+        if text is None:
+            data: bytes | bytearray = b""
         elif isinstance(text, (bytes, bytearray)):
             data = text
         else:
@@ -592,7 +753,7 @@ class Editor:
             # recorded, so get the new recorded value.
             timestamp = os.path.getmtime(name)
 
-            self.edit_file(name)
+            self.edit_files((name,))
 
             if self.require_save and os.path.getmtime(name) == timestamp:
                 return None
@@ -603,7 +764,7 @@ class Editor:
             if isinstance(text, (bytes, bytearray)):
                 return rv
 
-            return rv.decode("utf-8-sig").replace("\r\n", "\n")  # type: ignore
+            return rv.decode("utf-8-sig").replace("\r\n", "\n")
         finally:
             os.unlink(name)
 
@@ -634,18 +795,17 @@ def open_url(url: str, wait: bool = False, locate: bool = False) -> int:
     elif WIN:
         if locate:
             url = _unquote_file(url)
-            args = ["explorer", f"/select,{url}"]
+            args = ["explorer", "/select,", url]
+            try:
+                return subprocess.call(args)
+            except OSError:
+                return 127
         else:
-            args = ["start"]
-            if wait:
-                args.append("/WAIT")
-            args.append("")
-            args.append(url)
-        try:
-            return subprocess.call(args)
-        except OSError:
-            # Command not found
-            return 127
+            try:
+                os.startfile(url)  # type: ignore[attr-defined]
+            except OSError:
+                return 127
+            return 0
     elif CYGWIN:
         if locate:
             url = _unquote_file(url)
@@ -679,7 +839,7 @@ def open_url(url: str, wait: bool = False, locate: bool = False) -> int:
         return 1
 
 
-def _translate_ch_to_exc(ch: str) -> t.Optional[BaseException]:
+def _translate_ch_to_exc(ch: str) -> None:
     if ch == "\x03":
         raise KeyboardInterrupt()
 
@@ -689,14 +849,12 @@ def _translate_ch_to_exc(ch: str) -> t.Optional[BaseException]:
     if ch == "\x1a" and WIN:  # Windows, Ctrl+Z
         raise EOFError()
 
-    return None
 
-
-if WIN:
+if sys.platform == "win32":
     import msvcrt
 
     @contextlib.contextmanager
-    def raw_terminal() -> t.Iterator[int]:
+    def raw_terminal() -> cabc.Iterator[int]:
         yield -1
 
     def getchar(echo: bool) -> str:
@@ -729,12 +887,11 @@ if WIN:
         #
         # Anyway, Click doesn't claim to do this Right(tm), and using `getwch`
         # is doing the right thing in more situations than with `getch`.
-        func: t.Callable[[], str]
 
         if echo:
-            func = msvcrt.getwche  # type: ignore
+            func = t.cast(t.Callable[[], str], msvcrt.getwche)
         else:
-            func = msvcrt.getwch  # type: ignore
+            func = t.cast(t.Callable[[], str], msvcrt.getwch)
 
         rv = func()
 
@@ -751,8 +908,8 @@ else:
     import tty
 
     @contextlib.contextmanager
-    def raw_terminal() -> t.Iterator[int]:
-        f: t.Optional[t.TextIO]
+    def raw_terminal() -> cabc.Iterator[int]:
+        f: t.TextIO | None
         fd: int
 
         if not isatty(sys.stdin):

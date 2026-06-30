@@ -1,15 +1,15 @@
 from fastapi import APIRouter
 from fastapi import Depends
-from fastapi import HTTPException
-from fastapi import Query
-from sqlalchemy import asc , desc
 
+from fastapi import Query
+
+from services import product_service
 
 from sqlalchemy.orm import Session
 
 from database.db import SessionLocal
 
-from models.product_model import Product
+
 
 from schemas.product_schema import ProductCreate
 from schemas.product_schema import ProductResponse
@@ -37,20 +37,10 @@ def create_product(
     product : ProductCreate,
     db : Session = Depends(get_db)
 ):
-    new_product = Product(
-        name = product.name,
-        description = product.description,
-        price = product.price,
-        stock = product.stock
-    )    
-
-    db.add(new_product)
-    
-    db.commit()
-
-    db.refresh(new_product)
-
-    return new_product
+    return product_service.create_product(
+        db = db, 
+        product = product
+    )
 
 @router.get("/", response_model = list[ProductResponse])
 def get_products(
@@ -71,49 +61,23 @@ def get_products(
     db: Session = Depends(get_db)
 ):
     
-    query = db.query(Product)
+   return product_service.get_products(
+       db = db, 
 
+       skip = skip, 
 
-    if search : 
+       limit = limit, 
 
-        query = query.filter(
-            Product.name.ilike(f"%{search}")
-        )
+       search = search , 
 
-    
-    if min_price is not None:
+       min_price = min_price, 
 
-        query = query.filter(
-            Product.price >= min_price
-        )
+       max_price = max_price, 
 
-    
-    if max_price is not None:
+       sort_by = sort_by, 
 
-        query = query.filter(
-            Product.price <= max_price
-        )
-
-    sort_column = getattr(Product, sort_by , Product.id)
-
-    if order.lower() == "desc":
-
-        query = query.order_by(
-            
-            desc(sort_column)
-
-        )
-
-    else : 
-
-        query = query.order_by(
-
-            asc(sort_column)
-        )
-
-    products = query.offset(skip).limit(limit).all()
-
-    return products
+       order = order
+   )
 
 
 @router.get("/{product_id}", response_model = ProductResponse)
@@ -121,18 +85,11 @@ def get_product(
     product_id : int,
     db : Session = Depends(get_db)
 ):
-    product = db.query(Product).filter(
-        Product.id == product_id
-    ).first()
+    return product_service.get_product(
+        db = db, 
 
-    if not product:
-
-        raise HTTPException(
-            status_code = 404,
-            detail = "Product not Found!"
-        )
-    
-    return product
+        product_id = product_id
+    )
 
 @router.put(
     "/{product_id}",
@@ -144,26 +101,11 @@ def update_product(
     db : Session = Depends(get_db)
 ):
     
-    existing_product = db.query(Product).filter(
-        Product.id == product_id
-    ).first()
-
-    if not existing_product:
-        raise HTTPException(
-            status_code = 404,
-            detail = "Product Not Found!"
-        )
-    
-    existing_product.name = product.name
-    existing_product.description = product.description
-    existing_product.price = product.price
-    existing_product.stock = product.stock
-
-    db.commit()
-
-    db.refresh(existing_product)
-
-    return existing_product
+    return product_service.update_product(
+        db = db, 
+        product_id = product_id, 
+        product = product
+    )
 
 
 @router.delete("/{product_id}")
@@ -172,22 +114,7 @@ def delete_product(
     db : Session = Depends(get_db)
 ):
     
-    product = db.query(Product).filter(
-        Product.id == product_id
-    ).first()
-
-    if not product:
-
-        raise HTTPException(
-            status_code = 404,
-            detail = "Product Not Found!"
-        )
-    
-    db.delete(product)
-
-    db.commit()
-
-    return {
-        "message" : "Product deleted successfully!"
-    }
-
+    return product_service.delete_product(
+        product_id = product_id, 
+        db = db
+    )

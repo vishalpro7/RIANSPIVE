@@ -6,6 +6,46 @@ from fastapi import HTTPException
 from models.product_model import Product
 from schemas.product_schema import ProductCreate
 
+PRODUCT_NOT_FOUND = "Product Not Found!"
+
+INVALID_SORT_COLUMN = "Invalid Sort Column"
+
+
+
+PRODUCT_SORT_COLUMNS = {
+    "id" : Product.id, 
+
+    "name" : Product.name, 
+
+    "price" : Product.price, 
+
+    "stock" : Product.stock
+}
+
+
+
+def get_product_by_id(
+        db : Session, 
+        product_id : int
+):
+    
+    product = (
+        db.query(Product)
+        .filter(Product.id == product_id)
+        .first()
+    )
+
+    if product is None:
+
+        raise HTTPException(
+            status_code = 404, 
+            detail = PRODUCT_NOT_FOUND
+        )
+    
+    return product
+
+
+
 def create_product(
     product : ProductCreate,
     db : Session
@@ -32,16 +72,10 @@ def update_product(
     product: ProductCreate
 ):
     
-    existing_product = db.query(Product).filter(
-        Product.id == product_id
-    ).first()
-
-    if not existing_product:
-        raise HTTPException(
-            status_code = 404,
-            detail = "Product Not Found!"
-        )
-    
+    existing_product = get_product_by_id(
+        db, 
+        product_id
+    )
     existing_product.name = product.name
     existing_product.description = product.description
     existing_product.price = product.price
@@ -59,16 +93,10 @@ def delete_product(
     db : Session
 ):
     
-    product = db.query(Product).filter(
-        Product.id == product_id
-    ).first()
-
-    if not product:
-
-        raise HTTPException(
-            status_code = 404,
-            detail = "Product Not Found!"
-        )
+    product = get_product_by_id(
+        db, 
+        product_id
+    )
     
     db.delete(product)
 
@@ -110,21 +138,15 @@ def get_products(
             Product.price <= max_price
         )
 
-    allowed_columns = {
-        "id" : Product.id , 
-        "name" : Product.name, 
-        "price" : Product.price, 
-        "stock" : Product.stock
-    }
-
-    if sort_by not in allowed_columns:
+    if sort_by not in PRODUCT_SORT_COLUMNS:
 
         raise HTTPException(
             status_code = 400, 
-            detail = "Invalid sort column"
+            detail = INVALID_SORT_COLUMN
         )
     
-    sort_column = allowed_columns[sort_by]
+    
+    sort_column = PRODUCT_SORT_COLUMNS[sort_by]
 
     if order.lower() == "desc":
 
@@ -147,17 +169,8 @@ def get_product(
     product_id : int
 ):
     
-    product = (
-        db.query(Product).filter(
-            Product.id == product_id
-        ).first()
-    )
+   return get_product_by_id(
+       db, 
+       product_id
+   )
 
-    if product is None:
-
-        raise HTTPException(
-            status_code = 404, 
-            detail = "Product not found!"
-        )
-    
-    return product

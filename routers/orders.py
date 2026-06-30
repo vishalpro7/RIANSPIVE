@@ -15,8 +15,9 @@ from schemas.order_schema import OrderCreate
 from schemas.order_schema import OrderResponse
 from services.auth_service import get_current_user
 from schemas.order_schema import OrderSummary
-from schemas.order_schema import OrderDetailResponse
-
+from schemas.order_schema import OrderDetailResponse, OrderStatusUpdate
+from services.order_service import create_order
+from services import order_service
 
 
 
@@ -46,63 +47,13 @@ def create_order(
     current_user = Depends(get_current_user),
     db : Session = Depends(get_db)
 ):
-    total_amount = 0
+    return order_service.create_order(
+        db = db, 
 
-    for item in order.items:
+        order = order , 
 
-        product = db.query(Product).filter(
-            Product.id == item.product_id
-        ).first()
-
-        if not product:
-            
-            raise HTTPException(
-                status_code = 404,
-                detail = f"Product {item.product_id} Not Found!"
-            )
-        
-        if product.stock < item.quantity:
-            raise HTTPException(
-                status_code = 400, 
-                detail = f"Insufficient stock for {product.name}"
-            )
-        
-        total_amount += (
-            product.price * item.quantity
-        )
-
-    
-    new_order = Order(
-        user_id = current_user.id,
-        total_amount = total_amount
+        current_user = current_user
     )
-
-    db.add(new_order)
-
-    db.commit()
-
-    db.refresh(new_order)
-
-
-    for item in order.items:
-
-        product = db.query(Product).filter(
-            Product.id == item.product_id
-        ).first()
-
-        order_item = OrderItem(
-            order_id = new_order.id,
-            product_id = item.product_id,
-            quantity = item.quantity
-        )
-
-        db.add(order_item)
-
-        product.stock -= item.quantity
-
-    db.commit()
-
-    return new_order
 
 
 @router.get(
@@ -113,11 +64,10 @@ def get_my_orders(
     current_user = Depends(get_current_user),
     db : Session = Depends(get_db)
 ):
-    orders = db.query(Order).filter(
-        Order.user_id == current_user.id
-    ).all()
-
-    return orders
+    return order_service.get_my_orders(
+        current_user = current_user, 
+        db = db
+    )
 
 
 @router.get(
@@ -129,14 +79,43 @@ def get_order(
     db : Session = Depends(get_db)
 ):
     
-    order = db.query(Order).filter(
-        Order.id == order_id
-    ).first()
+    return order_service.get_order(
+        order_id = order_id, 
+        current_user = current_user, 
+        db = db
+    )
 
-    if not order:
-        raise HTTPException(
-            status_code = 404,
-            detail = "Order Not Found!"
-        )
+
+@router.put(
+    "/{order_id}", 
+    response_model = OrderResponse
+)
+def update_order_status(
+    order_id : int, 
+
+    order_status : OrderStatusUpdate, 
+
+    db : Session = Depends(get_db)
+):
     
-    return order
+    return order_service.update_order_status(
+        db = db, 
+
+        order_id = order_id, 
+
+        order_status = order_status
+    )
+
+
+@router.delete(
+    "/{order_id}"
+)
+def delete_order(
+    order_id : int, 
+    db : Session = Depends(get_db)
+):
+    
+    return order_service.delete_order(
+        order_id = order_id, 
+        db = db
+    )

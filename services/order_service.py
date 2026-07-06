@@ -52,16 +52,10 @@ def create_order(
 
     for item in order.items:
 
-        product = db.query(Product).filter(
-            Product.id == item.product_id
-        ).first()
-
-        if not product:
-            
-            raise HTTPException(
-                status_code = 404,
-                detail = f"Product {item.product_id} Not Found!"
-            )
+        product = get_product_by_id(
+            db = db, 
+            product_id = item.product_id
+        )
         
         if product.stock < item.quantity:
             raise HTTPException(
@@ -80,6 +74,25 @@ def create_order(
     )
 
     db.add(new_order)
+
+    for item in order.items:
+
+        product = get_product_by_id(
+            db = db, 
+            product_id = item.product_id
+        )
+
+        order_item = OrderItem(
+            order_id = new_order.id, 
+
+            product_id = item.product_id, 
+
+            quantity = item.quantity
+        )
+
+        db.add(order_item)
+
+        product.stock -= item.quantity
 
     db.commit()
 
@@ -105,17 +118,10 @@ def get_order(
     db : Session 
 ):
     
-    order = db.query(Order).filter(
-        Order.id == order_id
-    ).first()
-
-    if not order:
-        raise HTTPException(
-            status_code = 404,
-            detail = "Order Not Found!"
-        )
-    
-    return order
+    return get_order_by_id(
+        db = db, 
+        order_id = order_id
+    )
 
 def update_order_status(
         db : Session, 

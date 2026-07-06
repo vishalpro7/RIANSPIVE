@@ -39,5 +39,11 @@ class Order(Base):
         back_populates = "order", 
         uselist = False
     )
+
+    shipment = relationship(
+        "Shipment", 
+        back_populates = "order", 
+        uselist = False
+    )
     
     

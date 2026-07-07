@@ -3,10 +3,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import declarative_base
 from urllib.parse import quote_plus
 
-password = quote_plus("Basuvi@200607")
 
 DATABASE_URL = (
-    f"postgresql+psycopg2://postgres:{password}@localhost:5432/EnterpriseOrderDB"
+    "postgresql://neondb_owner:npg_QBh9Jg3srpPi@ep-plain-glitter-aoz7upu7-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 )
 print(DATABASE_URL)
 

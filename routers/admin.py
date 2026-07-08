@@ -12,6 +12,9 @@ from models.order_model import Order
 from models.payment_model import Payment
 
 from services.auth_service import get_current_user
+from services import dashboard_services
+from schemas.dashboard_schema import DashBoardResponse
+
 
 router = APIRouter(
     prefix="/admin",
@@ -116,3 +119,14 @@ def get_platform_stats(
         "total_orders": total_orders,
         "total_payments": total_payments
     }
+
+
+@router.get(
+    "/dashboard", 
+    response_model = DashBoardResponse
+)
+def get_dashboard(
+    db : Session = Depends(get_db)
+):
+    
+    return dashboard_services.get_dashboard(db)

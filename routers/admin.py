@@ -14,6 +14,8 @@ from models.payment_model import Payment
 from services.auth_service import get_current_user
 from services import dashboard_services
 from schemas.dashboard_schema import DashBoardResponse
+from schemas.analytics_schema import AnalyticsResponse
+from services import analytics_service
 
 
 router = APIRouter(
@@ -130,3 +132,14 @@ def get_dashboard(
 ):
     
     return dashboard_services.get_dashboard(db)
+
+
+@router.get(
+    "/analytics", 
+    response_model = AnalyticsResponse
+)
+def get_analytics(
+    db : Session = Depends(get_db)
+):
+    
+    return analytics_service.get_analytics(db)

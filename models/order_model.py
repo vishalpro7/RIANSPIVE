@@ -3,6 +3,8 @@ from sqlalchemy import Integer
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import relationship
 from database.db import Base
+from sqlalchemy import DateTime
+from sqlalchemy.sql import func
 
 class Order(Base):
 
@@ -44,6 +46,12 @@ class Order(Base):
         "Shipment", 
         back_populates = "order", 
         uselist = False
+    )
+
+    created_at = Column(
+        DateTime(timezone = True),
+        server_default = func.now(), 
+        nullable = False 
     )
     
     

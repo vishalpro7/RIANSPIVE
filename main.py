@@ -5,6 +5,7 @@ from routers.orders import router as order_router
 from routers.payments import router as payment_router
 from routers.admin import router as admin_router
 from routers.shipments import router as shipment_router
+from routers.analytics import router as analytics_router
 
 app = FastAPI()
 app.include_router(auth_router)
@@ -13,3 +14,4 @@ app.include_router(order_router)
 app.include_router(payment_router)
 app.include_router(admin_router)
 app.include_router(shipment_router)
+app.include_router(analytics_router)

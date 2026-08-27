@@ -141,3 +141,28 @@ def get_date_based_analytics(
         "end_date" : end_date, 
         "revenue" : revenue or 0
     }
+
+def get_revenue_by_status(
+        db : Session
+):
+    results = (
+        db.query(
+            Order.status, 
+            func.sum(Order.total_amount)
+        )
+        .group_by(Order.status)
+        .all()
+    )
+
+
+    revenue_by_status = [
+        {
+            "status" : status, 
+            "revenue" : revenue or 0
+        }
+        for status, revenue in results
+    ]
+
+    return {
+        "revenue_by_status" : revenue_by_status
+    }

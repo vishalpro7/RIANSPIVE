@@ -4,6 +4,7 @@ from sqlalchemy import func
 from models.product_model import Product
 from models.order_item_model import OrderItem
 from models.order_model import Order
+from datetime import datetime, timedelta
 
 def get_analytics(
         db : Session
@@ -78,3 +79,46 @@ def get_revenue_analytics(
         "total_orders" : total_orders or 0, 
         "average_order_value" : average_order_value or 0
     }
+
+def get_time_based_revenue(
+        db : Session
+):
+    now = datetime.now()
+
+    start_of_day = datetime(
+        now.year, 
+        now.month, 
+        now.day
+    )
+
+    start_of_month = datetime(
+        now.year, 
+        now.month, 
+        1
+    )
+
+    today_revenue = (
+        db.query(
+            func.sum(Order.total_amount)
+        )
+        .filter(
+            Order.created_at >= start_of_day
+        )
+        .scalar()
+    )
+
+    month_revenue = (
+        db.query(
+            func.sum(Order.total_amount)
+        )
+        .filter(
+            Order.created_at >= start_of_month
+        )
+        .scalar()
+    )
+
+    return {
+        "today_revenue" : today_revenue or 0, 
+        "month_revenue" : month_revenue or 0
+    }
+

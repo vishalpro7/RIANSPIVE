@@ -147,7 +147,7 @@ def get_revenue_by_status(
 ):
     results = (
         db.query(
-            Order.status, 
+            Order.status,
             func.sum(Order.total_amount)
         )
         .group_by(Order.status)
@@ -166,3 +166,28 @@ def get_revenue_by_status(
     return {
         "revenue_by_status" : revenue_by_status
     }
+
+def get_orders_by_status(
+        db : Session
+):
+    results = (
+        db.query(
+            Order.status, 
+            func.sum(Order.id)
+        )
+        .group_by(Order.status)
+        .all()
+    )
+
+    orders_by_status = [
+        {
+            "status" : status, 
+            "order_count" : order_count or 0
+        }
+        for status, order_count in results
+    ]
+
+    return {
+        "orders_by_status" : orders_by_status
+    }
+

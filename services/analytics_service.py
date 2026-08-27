@@ -122,3 +122,22 @@ def get_time_based_revenue(
         "month_revenue" : month_revenue or 0
     }
 
+def get_date_based_analytics(
+        db : Session,
+        start_date : datetime, 
+        end_date : datetime
+):
+    revenue = (
+        db.query(
+            func.sum(Order.total_amount)
+        )
+        .filter(Order.created_at >= start_date,
+                Order.created_at <= end_date)
+        .scalar()
+    )
+
+    return {
+        "start_date" : start_date, 
+        "end_date" : end_date, 
+        "revenue" : revenue or 0
+    }

@@ -1,9 +1,15 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database.db import SessionLocal
+from datetime import datetime, timedelta
 
 from database.db import get_db
-from services.analytics_service import get_analytics, get_revenue_analytics, get_time_based_revenue
+from services.analytics_service import (
+    get_analytics, 
+    get_revenue_analytics, 
+    get_time_based_revenue, 
+    get_date_based_analytics
+)
 from services.auth_service import get_current_user
 
 router = APIRouter(
@@ -27,9 +33,16 @@ def revenue_analytics(
     return get_revenue_analytics(db)
 
 
-@router.get("/revenue/time-based")
-def time_based_revenue(
-    db : Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+@router.get("/revenue/range")
+def revenue_by_date_range(
+        start_date: datetime,
+        end_date: datetime,
+        db: Session = Depends(get_db),
+        current_user = Depends(get_current_user)
 ):
-    return get_time_based_revenue(db)
+    
+    return get_date_based_analytics(
+        db=db,
+        start_date=start_date,
+        end_date=end_date
+    )

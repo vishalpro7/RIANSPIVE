@@ -252,3 +252,40 @@ def get_product_sales(
     return {
         "product_sales" : product_sales
     }
+
+def get_revenue_by_product(
+        db : Session
+):
+
+    results = (
+        db.query(
+            Product.name,
+            func.sum(
+                OrderItem.quantity * Product.price
+            )
+        )
+        .join(
+            OrderItem, 
+            Product.id == OrderItem.product_id
+        )
+        .group_by(
+            Product.id, 
+            Product.name
+        )
+        .order_by(
+            func.sum(OrderItem.quantity * Product.price).desc()
+        )
+        .all()
+    )
+
+    revenue_by_product = [
+        {
+            "product" : name, 
+            "revenue" : revenue or 0
+        }
+        for name, revenue in results
+    ]
+
+    return {
+        "revenue_by_product" : revenue_by_product
+    }

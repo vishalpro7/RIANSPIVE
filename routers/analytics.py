@@ -12,7 +12,8 @@ from services.analytics_service import (
     get_revenue_by_status,
     get_orders_by_status, 
     get_sales_by_date_range, 
-    get_product_sales
+    get_product_sales, 
+    get_revenue_by_product
 )
 from services.auth_service import get_current_user
 
@@ -92,3 +93,11 @@ def product_sales(
     current_user = Depends(get_current_user)
 ):
     return get_product_sales(db)
+
+@router.get("/revenue/product")
+def revenue_by_product(
+    db : Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    return get_revenue_by_product(db)
+

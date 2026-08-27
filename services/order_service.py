@@ -75,6 +75,8 @@ def create_order(
 
     db.add(new_order)
 
+    db.flush()
+
     for item in order.items:
 
         product = get_product_by_id(

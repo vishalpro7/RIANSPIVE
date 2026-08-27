@@ -217,3 +217,38 @@ def get_sales_by_date_range(
         "end_date" : end_date, 
         "quantity" : quantity or 0
     }
+
+def get_product_sales(
+        db : Session
+):
+
+    results = (
+        db.query(
+            Product.name, 
+            func.sum(OrderItem.quantity)
+        )
+        .join(
+            OrderItem, 
+            Product.id == OrderItem.order_id
+        )
+        .group_by(
+            Product.id, 
+            Product.name
+        )
+        .order_by(
+            func.sum(OrderItem.quantity).desc()
+        )
+        .all()
+    )
+
+    product_sales = [
+        {
+            "product" : product, 
+            "quantity_sold" : quantity_sold or 0
+        }
+        for product, quantity_sold in results
+    ]
+
+    return {
+        "product_sales" : product_sales
+    }

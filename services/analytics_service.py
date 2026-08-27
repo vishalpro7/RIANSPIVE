@@ -191,3 +191,29 @@ def get_orders_by_status(
         "orders_by_status" : orders_by_status
     }
 
+def get_sales_by_date_range(
+        db : Session, 
+        start_date : datetime, 
+        end_date : datetime
+):
+
+    quantity = (
+        db.query(
+            func.sum(OrderItem.quantity)
+        )
+        .join(
+            Order, 
+            Order.id == OrderItem.order_id
+        )
+        .filter(
+            Order.created_at >= start_date, 
+            Order.created_at <= end_date
+        )
+        .scalar()
+    )
+
+    return {
+        "start_date" : start_date, 
+        "end_date" : end_date, 
+        "quantity" : quantity or 0
+    }

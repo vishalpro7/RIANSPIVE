@@ -13,7 +13,8 @@ from services.analytics_service import (
     get_orders_by_status, 
     get_sales_by_date_range, 
     get_product_sales, 
-    get_revenue_by_product
+    get_revenue_by_product, 
+    get_low_stock_products
 )
 from services.auth_service import get_current_user
 
@@ -101,3 +102,12 @@ def revenue_by_product(
 ):
     return get_revenue_by_product(db)
 
+@router.get("/inventory/low-stock")
+def low_stock_product(
+    threshold : int = 10,
+    db : Session = Depends(get_db) 
+):
+    return get_low_stock_products(
+        db = db, 
+        threshold = threshold
+    )

@@ -289,3 +289,30 @@ def get_revenue_by_product(
     return {
         "revenue_by_product" : revenue_by_product
     }
+
+def get_low_stock_products(
+        db : Session, 
+        threshold : int = 10
+):
+    products = (
+        db.query(
+            Product
+        )
+        .filter(Product.stock <= threshold)
+        .order_by(Product.stock.asc())
+        .all()
+    )
+
+    low_stock_products = [
+        {
+            "product_id" : product.id, 
+            "product" : product.name, 
+            "stock" : product.stock
+        }
+        for product in products
+    ]
+
+    return {
+        "threshold" : threshold, 
+        "low_stock_products" : low_stock_products
+    }

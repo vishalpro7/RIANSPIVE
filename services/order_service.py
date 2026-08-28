@@ -156,7 +156,24 @@ def update_order_status(
             status_code=400, 
             detail = f"Cannot change order status from {order.status} to {order_status.status}"
         )
-    
+
+
+    if order_status.status == "CANCELLED":
+
+        order_items = (
+            db.query(OrderItem)
+            .filter(OrderItem.order_id == order.id)
+            .all()
+        )
+
+        for item in order_items:
+
+            product = get_product_by_id(
+                db = db, 
+                product_id = item.product_id
+            )
+
+            product.stock += item.quantity
     
     order.status = order_status.status
 

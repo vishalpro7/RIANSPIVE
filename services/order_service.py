@@ -127,10 +127,17 @@ def get_order(
     db : Session 
 ):
     
-    return get_order_by_id(
+    order = get_order_by_id(
         db = db, 
         order_id = order_id
     )
+
+    if order.user_id != current_user.id:
+        raise HTTPException(
+            status_code = 403, 
+            detail = "You are not authorized to access this order"
+        )
+    return order
 
 def update_order_status(
         db : Session, 

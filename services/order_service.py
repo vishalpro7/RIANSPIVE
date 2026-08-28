@@ -10,19 +10,19 @@ from services.product_service import get_product_by_id
 
 
 ALLOWED_STATUS = [
-        "Pending", 
-        "Processing", 
-        "Shipped", 
-        "Delivered", 
-        "Cancelled"
+        "PENDING", 
+        "PROCESSING", 
+        "SHIPPED", 
+        "DELIVERED", 
+        "CANCELLED"
     ]
 
 STATUS_TRANSITIONS = {
-    "Pending" : ["Processing", "Cancelled"], 
-    "Processing" : ["Shipped", "Cancelled"], 
-    "Shipped" : ["Delivered"], 
-    "Delivered" : [], 
-    "Cancelled" : []
+    "PENDING" : ["PROCESSING", "CANCELLED"], 
+    "PROCESSING" : ["SHIPPED", "CANCELLED"], 
+    "SHIPPED" : ["DELIVERED"], 
+    "DELIVERED" : [], 
+    "CANCELLED" : []
 }
 
 

@@ -17,6 +17,13 @@ ALLOWED_STATUS = [
         "Cancelled"
     ]
 
+STATUS_TRANSITIONS = {
+    "Pending" : ["Processing", "Cancelled"], 
+    "Processing" : ["Shipped", "Cancelled"], 
+    "Shipped" : ["Delivered"], 
+    "Delivered" : [], 
+    "Cancelled" : []
+}
 
 
 def get_order_by_id(
@@ -143,6 +150,13 @@ def update_order_status(
             status_code = 400, 
             detail = "Invalid Order Status!"
         )
+
+    if order_status.status not in STATUS_TRANSITIONS[order.status]:
+        raise HTTPException(
+            status_code=400, 
+            detail = f"Cannot change order status from {order.status} to {order_status.status}"
+        )
+    
     
     order.status = order_status.status
 

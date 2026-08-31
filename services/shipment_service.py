@@ -7,6 +7,17 @@ from models.order_model import Order
 from schemas.shipment_schema import ShipmentCreate, ShipmentUpdate
 
 
+ALLOWED_STATUS = {
+    "PROCESSING",
+    "PACKED",
+    "SHIPPED",
+    "OUT_FOR_DELIVERY",
+    "DELIVERED",
+    "RETURNED",
+    "CANCELLED"
+}
+
+
 SHIPMENT_STATUS_TRANSITIONS = {
     "PROCESSING" : ["PACKED"], 
     "PACKED" : ["SHIPPED"], 

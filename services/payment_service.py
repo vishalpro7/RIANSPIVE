@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 
 from models.order_model import Order
 from models.payment_model import Payment
+from models.order_item_model import OrderItem
+from models.product_model import Product
 from schemas.payment_schema import PaymentUpdate, PaymentCreate
 
 
@@ -88,7 +90,7 @@ def update_payment_service(
 
     payment.status = payment_update.status
 
-    if payment_update.status == "SUCCCESS":
+    if payment_update.status == "SUCCESS":
          order = (
               db.query(Order)
               .filter(Order.id == payment.order_id)
@@ -97,6 +99,35 @@ def update_payment_service(
 
          if order and order.status == "PENDING":
               order.status == "PROCESSING"
+
+    elif payment_update.status == "FAILED":
+
+        order = (
+        db.query(Order)
+        .filter(Order.id == payment.order_id)
+        .first()
+    )
+
+        if order and order.status == "PENDING":
+
+            order_items = (
+            db.query(OrderItem)
+            .filter(OrderItem.order_id == order.id)
+            .all()
+        )
+
+            for item in order_items:
+
+                product = (
+                db.query(Product)
+                .filter(Product.id == item.product_id)
+                .first()
+            )
+
+                if product:
+                    product.stock += item.quantity
+
+            order.status = "CANCELLED"
 
     db.commit()
 

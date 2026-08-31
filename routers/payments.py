@@ -8,7 +8,7 @@ from models.order_model import Order
 from schemas.order_schema import OrderStatusUpdate
 from models.payment_model import Payment
 from services.auth_service import get_current_user
-from services.payment_service import create_payment, update_payment_service
+from services.payment_service import create_payment, update_payment_service, get_all_payments, get_payment_by_id
 
 
 router = APIRouter(
@@ -54,6 +54,26 @@ def update_payment_status(
         current_user = current_user, 
         db = db
     )
+
+@router.get("/getpayments")
+def all_payments(
+    db : Session = Depends(get_db), 
+):
+    return get_all_payments(
+        db = db
+    )
+
+@router.get("/{payment_id}")
+def payment_by_id(
+    payment_id : int, 
+    db : Session = Depends(get_db)
+):
+    return get_payment_by_id(
+        payment_id = payment_id, 
+        db = db
+    )
+
+
 
 
 

@@ -93,6 +93,41 @@ def update_payment_service(
     db.refresh(payment)
 
     return payment
+
+def get_all_payments(
+          db : Session
+):
+     payments = (
+          db.query(Payment)
+          .all()
+     )
+
+     if not payments:
+          raise HTTPException(
+               status_code = 404, 
+               detail = "No orders found!"
+          )
+     
+
+     return payments;
+
+def get_payment_by_id(
+          payment_id : int, 
+          db : Session
+):
+     payment = (
+          db.query(Payment)
+          .filter(Payment.id == payment_id)
+          .first()
+     )
+
+     if not payment:
+          raise HTTPException(
+               status_code = 404, 
+               detail = "Payment not found"
+          )
+
+     return payment
     
     
     

@@ -95,39 +95,53 @@ def update_payment_service(
     return payment
 
 def get_all_payments(
-          db : Session
+          db : Session, 
+          current_user
 ):
-     payments = (
+
+    if current_user.role != "Admin":
+        raise HTTPException(
+            status_code = 403, 
+            detail = "Not Authorized!"
+        )
+
+    payments = (
           db.query(Payment)
           .all()
      )
 
-     if not payments:
+    if not payments:
           raise HTTPException(
                status_code = 404, 
                detail = "No orders found!"
           )
-     
 
-     return payments;
+    return payments;
 
 def get_payment_by_id(
           payment_id : int, 
-          db : Session
+          db : Session, 
+          current_user
 ):
-     payment = (
+    if current_user.role != "Admin":
+        raise HTTPException(
+             status_code = 403, 
+             detail = "Not authorized"
+        )
+
+    payment = (
           db.query(Payment)
           .filter(Payment.id == payment_id)
           .first()
      )
 
-     if not payment:
+    if not payment:
           raise HTTPException(
                status_code = 404, 
                detail = "Payment not found"
           )
 
-     return payment
+    return payment
     
     
     

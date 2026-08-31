@@ -57,20 +57,24 @@ def update_payment_status(
 
 @router.get("/getpayments")
 def all_payments(
-    db : Session = Depends(get_db), 
+    db : Session = Depends(get_db),
+    current_user = Depends(get_current_user) 
 ):
     return get_all_payments(
-        db = db
+        db = db, 
+        current_user = current_user
     )
 
 @router.get("/{payment_id}")
 def payment_by_id(
     payment_id : int, 
-    db : Session = Depends(get_db)
+    db : Session = Depends(get_db), 
+    current_user = Depends(get_current_user)
 ):
     return get_payment_by_id(
         payment_id = payment_id, 
-        db = db
+        db = db, 
+        current_user = current_user
     )
 
 

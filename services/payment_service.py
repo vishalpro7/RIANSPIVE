@@ -88,6 +88,16 @@ def update_payment_service(
 
     payment.status = payment_update.status
 
+    if payment_update.status == "SUCCCESS":
+         order = (
+              db.query(Order)
+              .filter(Order.id == payment.order_id)
+              .first()
+         )
+
+         if order and order.status == "PENDING":
+              order.status == "PROCESSING"
+
     db.commit()
 
     db.refresh(payment)

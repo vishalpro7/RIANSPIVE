@@ -7,18 +7,13 @@ from models.order_model import Order
 from schemas.shipment_schema import ShipmentCreate, ShipmentUpdate
 
 
-ALLOWED_STATUS = {
-    "Processing", 
-
-    "Packed", 
-
-    "Shipped", 
-
-    "Out For Delivery", 
-
-    "Delivered", 
-
-    "Returned"
+SHIPMENT_STATUS_TRANSITIONS = {
+    "PROCESSING" : ["PACKED"], 
+    "PACKED" : ["SHIPPED"], 
+    "SHIPPED" : ["OUT FOR DELIVERY", "RETURNED"], 
+    "OUT FOR DELIVERY" : ["DELIVERED", "RETURNED"], 
+    "DELIVERED" : [], 
+    "RETURNED" : []
 }
 
 
@@ -59,7 +54,7 @@ def create_shipment(
     if order is None:
 
         raise HTTPException(
-            status_code = "404",
+            status_code = 404,
             detail = "Order not found"
         )
     
@@ -118,12 +113,11 @@ def update_shipment(
         shipment_id = shipment_id
     )
 
-    if shipment_update.status not in ALLOWED_STATUS:
-
+    if shipment_update.status not in SHIPMENT_STATUS_TRANSITIONS[shipment.status]:
         raise HTTPException(
             status_code = 400, 
-            detail = "Invalid Shipment Status!"
-        )
+            detail = f"Cannot Change shipment status from {shipment.status} to {shipment_update.status}"
+        )  
     
     shipment.status = shipment_update.status
 

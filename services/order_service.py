@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from models.order_model import Order
 from models.order_item_model import OrderItem
 from models.product_model import Product
+from models.shipment_model import Shipment
 
 from schemas.order_schema import OrderCreate, OrderStatusUpdate
 from services.product_service import get_product_by_id
@@ -180,6 +181,15 @@ def update_order_status(
             )
 
             product.stock += item.quantity
+
+        shipment = (
+            db.query(Shipment)
+            .filter(Shipment.order_id == order.id)
+            .first()
+        )
+
+        if shipment:
+            shipment.status = "CANCELLED"
     
     order.status = order_status.status
 

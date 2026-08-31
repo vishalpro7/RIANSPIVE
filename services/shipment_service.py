@@ -24,7 +24,8 @@ SHIPMENT_STATUS_TRANSITIONS = {
     "SHIPPED" : ["OUT FOR DELIVERY", "RETURNED"], 
     "OUT FOR DELIVERY" : ["DELIVERED", "RETURNED"], 
     "DELIVERED" : [], 
-    "RETURNED" : []
+    "RETURNED" : [], 
+    "CANCELLED" : []
 }
 
 

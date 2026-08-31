@@ -34,12 +34,14 @@ def get_db():
         response_model = PaymentResponse)
 def do_create_payment(
     payment : PaymentCreate, 
-    db : Session = Depends(get_db)
+    db : Session = Depends(get_db), 
+    current_user = Depends(get_current_user)
 ):
 
     return create_payment(
         db = db, 
-        payment = payment
+        payment = payment, 
+        current_user = current_user
     )
 
 

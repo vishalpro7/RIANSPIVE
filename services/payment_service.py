@@ -18,7 +18,8 @@ PAYMENT_STATUS_TRANSITIONS = {
 
 def create_payment(
         db : Session, 
-        payment : PaymentCreate
+        payment : PaymentCreate, 
+        current_user
 ):
     order = (
         db.query(Order)
@@ -31,6 +32,12 @@ def create_payment(
             status_code = 404, 
             detail = "Order not found!"
         )
+
+    if order.user_id != current_user.id:
+         raise HTTPException(
+              status_code = 403, 
+              detail = "You are not authorized to pay for this order"
+         )
 
     existing_payment = (
         db.query(Payment)
@@ -98,7 +105,7 @@ def update_payment_service(
          )
 
          if order and order.status == "PENDING":
-              order.status == "PROCESSING"
+              order.status = "PROCESSING"
 
     elif payment_update.status == "FAILED":
 

@@ -25,7 +25,6 @@ STATUS_TRANSITIONS = {
     "CANCELLED" : []
 }
 
-
 def get_order_by_id(
         db : Session, 
         order_id : int

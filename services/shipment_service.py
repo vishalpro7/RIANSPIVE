@@ -17,6 +17,15 @@ SHIPMENT_STATUS_TRANSITIONS = {
 }
 
 
+SHIPMENT_ORDER_STATUS_MAP = {
+    "PROCESSING" : "PROCESSING", 
+    "PACKED" : "PROCESSING", 
+    "SHIPPED" : "SHIPPED", 
+    "OUT FOR DELIVERY" : "SHIPPED", 
+    "DELIVERED" : "DELIVERED", 
+    "RETURNED" : "CANCELLED"
+}
+
 def get_shipment_by_id(
         db : Session, 
         shipment_id : int
@@ -57,6 +66,13 @@ def create_shipment(
             status_code = 404,
             detail = "Order not found"
         )
+
+    if order.status != "PROCESSING":
+        raise HTTPException(
+            status_code = 400, 
+            detail = "Shipment can only be created when the order is in PROCESSING state"
+        )
+    
     
     existing = (
         db.query(Shipment)
@@ -117,9 +133,18 @@ def update_shipment(
         raise HTTPException(
             status_code = 400, 
             detail = f"Cannot Change shipment status from {shipment.status} to {shipment_update.status}"
-        )  
+        )
     
     shipment.status = shipment_update.status
+
+    order = (
+        db.query(Order)
+        .filter(Order.id == shipment.order_id)
+        .first()
+    )
+
+    if order:
+        order.status = SHIPMENT_ORDER_STATUS_MAP[shipment_update.status]
 
     db.commit()
 

@@ -37,7 +37,7 @@ class Shipment(Base):
 
     status = Column(
         String(50),
-        default = "Processing"
+        default = "PROCESSING"
     )
 
     order = relationship(

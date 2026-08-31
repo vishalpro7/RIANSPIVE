@@ -5,6 +5,11 @@ class PaymentCreate(BaseModel):
     order_id : int
 
 
+class PaymentUpdate(BaseModel):
+
+    payment_id : int
+    status : str
+
 class PaymentResponse(BaseModel):
 
     id : int

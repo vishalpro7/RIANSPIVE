@@ -1,4 +1,4 @@
-# 🛒 Enterprise Order Management Platform
+# 🛒 RIANSPIVE
 
 > A modular, FastAPI-powered backend for end-to-end e-commerce order management — from product catalog to payments, shipments, and analytics.
 
@@ -13,7 +13,7 @@
 
 ## 📖 Overview
 
-**Enterprise Order Management Platform** is a backend system built to simulate how a real-world e-commerce company handles orders at scale — covering everything from authentication and product catalogs to order processing, payments, shipment tracking, admin controls, and analytics.
+**RIANSPIVE** is a backend system built to simulate how a real-world e-commerce company handles orders at scale — covering everything from authentication and product catalogs to order processing, payments, shipment tracking, admin controls, and analytics.
 
 It's built with **FastAPI** for speed and clean async APIs, **SQLAlchemy 2.0** for the ORM layer, and **Alembic** for versioned database migrations — a stack designed to mirror production-grade backend architecture rather than a single-file prototype.
 

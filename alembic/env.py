@@ -15,6 +15,7 @@ from models.order_model import Order
 from models.order_item_model import OrderItem
 from models.payment_model import Payment
 from models.shipment_model import Shipment
+from models.order_status_history_model import OrderStatusHistory
 
 
 # Alembic Config object

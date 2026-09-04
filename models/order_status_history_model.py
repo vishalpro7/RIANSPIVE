@@ -54,13 +54,5 @@ class OrderStatusHistory(Base):
         back_populates="status_changes"
     )
 
-    status_history = relationship(
-        "OrderStatusHistory", 
-        back_populates="order"
-    )
-
-    status_changes = relationship(
-        "OrderStatusHistory", 
-        back_populates="user"
-    )
+    
     

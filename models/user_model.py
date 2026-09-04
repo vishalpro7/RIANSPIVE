@@ -20,5 +20,10 @@ class User(Base):
         back_populates = "user"
     )
 
+    status_changes = relationship(
+            "OrderStatusHistory", 
+            back_populates="user"
+        )
+
     
 

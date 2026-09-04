@@ -53,5 +53,11 @@ class Order(Base):
         server_default = func.now(), 
         nullable = False 
     )
+
+    status_history = Column(
+        "OrderStatusHistory", 
+        back_populates = "order"
+    )
+    
     
     

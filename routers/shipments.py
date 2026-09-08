@@ -10,6 +10,7 @@ from schemas.shipment_schema import ShipmentUpdate
 from schemas.shipment_schema import ShipmentResponse
 
 from services import shipment_service
+from services.auth_service import get_current_user
 
 router = APIRouter(
     prefix = "/shipments", 
@@ -37,12 +38,14 @@ def get_db():
 )
 def create_shipment(
     shipment : ShipmentCreate, 
-    db : Session = Depends(get_db)
+    db : Session = Depends(get_db), 
+    current_user = Depends(get_current_user)
 ):
     
     return shipment_service.create_shipment(
         db = db, 
-        shipment = shipment
+        shipment = shipment, 
+        current_user = current_user
     )
 
 
@@ -52,12 +55,14 @@ def create_shipment(
 )
 def get_shipment_by_id(
     shipment_id : int, 
-    db : Session = Depends(get_db)
+    db : Session = Depends(get_db), 
+    current_user = Depends(get_current_user)
 ):
     
     return shipment_service.get_shipment(
         db = db, 
-        shipment_id = shipment_id
+        shipment_id = shipment_id, 
+        current_user = current_user
     )
 
 
@@ -69,13 +74,15 @@ def get_shipment_by_id(
 def update_shipment(
     shipment_id : int, 
     shipment_update : ShipmentUpdate,
-    db : Session = Depends(get_db)
+    db : Session = Depends(get_db), 
+    current_user = Depends(get_current_user)
 ):
     
     return shipment_service.update_shipment(
         db = db, 
         shipment_id = shipment_id, 
-        shipment_update = shipment_update
+        shipment_update = shipment_update, 
+        current_user = current_user
     )
 
 
@@ -84,10 +91,12 @@ def update_shipment(
 )
 def delete_shipment(
     shipment_id : int, 
-    db : Session = Depends(get_db)
+    db : Session = Depends(get_db), 
+    current_user = Depends(get_current_user)
 ):
     
     return shipment_service.delete_shipment(
         db = db,
-        shipment_id = shipment_id
+        shipment_id = shipment_id, 
+        current_user = current_user
     )

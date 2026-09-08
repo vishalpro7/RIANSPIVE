@@ -22,7 +22,7 @@ SHIPMENT_STATUS_TRANSITIONS = {
     "PROCESSING" : ["PACKED"], 
     "PACKED" : ["SHIPPED"], 
     "SHIPPED" : ["OUT FOR DELIVERY", "RETURNED"], 
-    "OUT FOR DELIVERY" : ["DELIVERED", "RETURNED"], 
+    "OUT_FOR_DELIVERY" : ["DELIVERED", "RETURNED"], 
     "DELIVERED" : [], 
     "RETURNED" : [], 
     "CANCELLED" : []
@@ -40,14 +40,20 @@ SHIPMENT_ORDER_STATUS_MAP = {
 
 def get_shipment_by_id(
         db : Session, 
-        shipment_id : int
+        shipment_id : int, 
+        current_user
 ):
-    
     shipment = (
         db.query(Shipment).filter(
             Shipment.id == shipment_id
         ).first()
     )
+
+    if shipment.order.user_id != current_user.id:
+        raise HTTPException(
+            status_code = 403, 
+            detail = "You are not authorized to get this shipment details"
+        )
 
     if shipment is None:
 
@@ -61,7 +67,8 @@ def get_shipment_by_id(
 
 def create_shipment(
         db : Session, 
-        shipment : ShipmentCreate
+        shipment : ShipmentCreate, 
+        current_user
 ):
     
     order = (
@@ -83,6 +90,12 @@ def create_shipment(
         raise HTTPException(
             status_code = 400, 
             detail = "Shipment can only be created when the order is in PROCESSING state"
+        )
+
+    if current_user.role != "Admin":
+        raise HTTPException(
+            status_code = 403, 
+            detail = "You are not authorized to create this shipment"
         )
     
     
@@ -121,25 +134,46 @@ def create_shipment(
 
 def get_shipment(
         db : Session, 
-        shipment_id : int
+        shipment_id : int, 
+        current_user
 ):
     
-    return get_shipment_by_id(
+    shipment =  get_shipment_by_id(
         db = db, 
         shipment_id = shipment_id
     )
+
+    order = shipment.order
+
+    if(
+        current_user.role != "Admin"
+        and order.user_id != current_user.id
+    ):
+        raise HTTPException(
+            status_code = 403, 
+            detail = "You are not authorized to get the shipment"
+        )
 
 
 def update_shipment(
         db : Session, 
         shipment_id : int, 
-        shipment_update : ShipmentUpdate
+        shipment_update : ShipmentUpdate, 
+        current_user
 ):
     
     shipment = get_shipment_by_id(
         db = db, 
         shipment_id = shipment_id
     )
+
+    if(
+        current_user.role != "Admin"
+    ):
+        raise HTTPException(
+            status_code = 403, 
+            detail = "You need to an Admin to update the shipment"
+        )
 
     if shipment_update.status not in SHIPMENT_STATUS_TRANSITIONS[shipment.status]:
         raise HTTPException(
@@ -166,8 +200,15 @@ def update_shipment(
 
 def delete_shipment(
         db : Session, 
-        shipment_id : int
+        shipment_id : int, 
+        current_user
 ):
+
+    if(current_user.role != "Admin"):
+        raise HTTPException(
+            status_code = 403, 
+            detail = "You need to be an admin to delete this order"
+        )
     
     shipment = get_shipment_by_id(
         db = db, 

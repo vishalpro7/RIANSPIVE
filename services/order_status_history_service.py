@@ -38,6 +38,12 @@ def get_order_status_history(
             status_code = 404, 
             detail = "Order not found!"
         )
+
+    if(current_user.role != "Admin" and order.user_id != current_user.id):
+        raise HTTPException(
+            status_code = 403, 
+            detail = "Not authorized to access this order history"
+        )
     
     history = (
         db.query(OrderStatusHistory)

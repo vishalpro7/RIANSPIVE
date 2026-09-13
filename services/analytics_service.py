@@ -5,10 +5,18 @@ from models.product_model import Product
 from models.order_item_model import OrderItem
 from models.order_model import Order
 from datetime import datetime, timedelta
+from fastapi import HTTPException
 
 def get_analytics(
-        db : Session
+        db : Session, 
+        current_user
 ):
+
+    if current_user.role != "Admin":
+        raise HTTPException(
+            status_code = 403, 
+            detail = "You are not authorized to perform this action"
+        )
     
     results = (
         db.query(

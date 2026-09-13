@@ -16,6 +16,16 @@ from services import dashboard_services
 from schemas.dashboard_schema import DashBoardResponse
 from schemas.analytics_schema import AnalyticsResponse
 from services import analytics_service
+from services.admin_service import (
+    admin_only, 
+    get_analytics, 
+    get_all_users, 
+    get_all_orders, 
+    get_all_payments, 
+    get_all_products,
+    get_platform_stats, 
+    get_dashboard_services
+)
 
 
 router = APIRouter(
@@ -34,112 +44,87 @@ def get_db():
     finally:
         db.close()
 
-
-def admin_only(current_user):
-
-    if current_user.role != "Admin":
-
-        raise HTTPException(
-            status_code=403,
-            detail="Access Denied"
-        )
-
-    return current_user
-
-
 @router.get("/users")
-def get_all_users(
+def all_users(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
-    admin_only(current_user)
-
-    users = db.query(User).all()
-
-    return users
+    return get_all_users(
+        db = db, 
+        current_user = current_user
+    )
 
 
 @router.get("/orders")
-def get_all_orders(
+def all_orders(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
-    admin_only(current_user)
-
-    orders = db.query(Order).all()
-
-    return orders
+    return get_all_orders(
+        db = db, 
+        current_user = current_user
+    )
 
 
 @router.get("/payments")
-def get_all_payments(
+def all_payments(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
-    admin_only(current_user)
-
-    payments = db.query(Payment).all()
-
-    return payments
+    return get_all_payments(
+        db = db, 
+        current_user = current_user
+    )
 
 
 @router.get("/products")
-def get_all_products(
+def all_products(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-
-    admin_only(current_user)
-
-    products = db.query(Product).all()
-
-    return products
-
+    return get_all_products(
+        db = db, 
+        current_user = current_user
+    )
+    
 
 @router.get("/stats")
-def get_platform_stats(
+def platform_stats(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
-    admin_only(current_user)
-
-    total_users = db.query(User).count()
-
-    total_products = db.query(Product).count()
-
-    total_orders = db.query(Order).count()
-
-    total_payments = db.query(Payment).count()
-
-    return {
-        "total_users": total_users,
-        "total_products": total_products,
-        "total_orders": total_orders,
-        "total_payments": total_payments
-    }
-
+   return get_platform_stats(
+       db = db, 
+       current_user = current_user
+   )
 
 @router.get(
     "/dashboard", 
     response_model = DashBoardResponse
 )
-def get_dashboard(
-    db : Session = Depends(get_db)
+def dashboard(
+    db : Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
-    
-    return dashboard_services.get_dashboard(db)
+    return get_dashboard_services(
+        db = db, 
+        current_user = current_user
+    )
 
 
 @router.get(
     "/analytics", 
     response_model = AnalyticsResponse
 )
-def get_analytics(
-    db : Session = Depends(get_db)
+def analytics(
+    db : Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
-    
-    return analytics_service.get_analytics(db)
+    return get_analytics(
+        db = db, 
+        current_user = current_user
+    )

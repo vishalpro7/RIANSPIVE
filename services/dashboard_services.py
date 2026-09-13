@@ -1,12 +1,22 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from fastapi import HTTPException
 
 from models.user_model import User
 from models.product_model import Product
 from models.order_model import Order
 
 
-def get_dashboard(db : Session):
+def get_dashboard(
+        db : Session,
+        current_user
+    ):
+
+    if current_user.role != "Admin":
+        raise HTTPException(
+            status_code = 403, 
+            detail = "You are not authorized to perform this action"
+        )
 
     total_users = db.query(
         func.count(User.id)
